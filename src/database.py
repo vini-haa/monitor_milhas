@@ -12,6 +12,8 @@ CREATE TABLE IF NOT EXISTS promocoes (
     data_inicio VARCHAR(50),
     data_fim VARCHAR(50),
     url TEXT,
+    tipo VARCHAR(20) NOT NULL DEFAULT 'oferta',
+    descricao TEXT DEFAULT '',
     promo_hash VARCHAR(64) UNIQUE NOT NULL,
     criado_em TIMESTAMP DEFAULT NOW()
 );
@@ -20,8 +22,8 @@ CREATE TABLE IF NOT EXISTS promocoes (
 SQL_VERIFICAR_HASH = "SELECT 1 FROM promocoes WHERE promo_hash = %s"
 
 SQL_INSERIR = """
-INSERT INTO promocoes (parceiro, bonus_percentual, data_inicio, data_fim, url, promo_hash)
-VALUES (%s, %s, %s, %s, %s, %s)
+INSERT INTO promocoes (parceiro, bonus_percentual, data_inicio, data_fim, url, tipo, descricao, promo_hash)
+VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
 """
 
 
@@ -60,9 +62,11 @@ class DatabaseManager:
                 promo.data_inicio,
                 promo.data_fim,
                 promo.url,
+                promo.tipo,
+                promo.descricao,
                 promo.promo_hash,
             ))
-        logger.info("Promoção salva: %s (%d%% bônus)", promo.parceiro, promo.bonus_percentual)
+        logger.info("Promoção salva: [%s] %s (%d%%)", promo.tipo, promo.parceiro, promo.bonus_percentual)
 
     def fechar(self):
         """Fecha a conexão com o banco."""

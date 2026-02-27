@@ -19,13 +19,23 @@ class TelegramNotifier:
 
     def _formatar_mensagem(self, promo: Promocao) -> str:
         """Formata a promoção como mensagem HTML para o Telegram."""
-        return (
-            f"<b>Nova Promoção Livelo!</b>\n\n"
-            f"<b>Parceiro:</b> {promo.parceiro}\n"
-            f"<b>Bônus:</b> {promo.bonus_percentual}%\n"
-            f"<b>Período:</b> {promo.data_inicio} até {promo.data_fim}\n\n"
-            f'<a href="{promo.url}">Ver promoção no site</a>'
-        )
+        if promo.tipo == "transferencia":
+            return (
+                f"<b>Bonus de Transferencia!</b>\n\n"
+                f"<b>Programa:</b> {promo.parceiro}\n"
+                f"<b>Bonus:</b> {promo.bonus_percentual}%\n"
+                f"<b>Periodo:</b> {promo.data_inicio} ate {promo.data_fim}\n"
+                f"<b>Fonte:</b> {promo.descricao[:100]}\n\n"
+                f'<a href="{promo.url}">Ver detalhes</a>'
+            )
+        else:
+            return (
+                f"<b>Oferta Livelo!</b>\n\n"
+                f"<b>Parceiro:</b> {promo.parceiro}\n"
+                f"<b>Pontuacao:</b> {promo.bonus_percentual} pts/real\n"
+                f"<b>Detalhes:</b> {promo.descricao[:120]}\n\n"
+                f'<a href="{promo.url}">Ver oferta</a>'
+            )
 
     def enviar_alerta(self, promo: Promocao) -> bool:
         """Envia alerta de uma promoção para o Telegram com retry."""
@@ -42,7 +52,8 @@ class TelegramNotifier:
                 resp = requests.post(self.api_url, json=payload, timeout=10)
                 resp.raise_for_status()
                 logger.info(
-                    "Alerta enviado para %s (%d%% bônus)",
+                    "Alerta enviado: [%s] %s (%d%%)",
+                    promo.tipo,
                     promo.parceiro,
                     promo.bonus_percentual,
                 )

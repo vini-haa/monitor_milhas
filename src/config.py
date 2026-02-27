@@ -3,7 +3,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-LIVELO_URL_DEFAULT = "https://www.livelo.com.br/ganhe-pontos-transferencia-pontos"
+LIVELO_URL_DEFAULT = "https://www.livelo.com.br/ofertas"
 
 
 class Config:
