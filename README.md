@@ -1,116 +1,68 @@
-# Monitor Milhas
+# Livelo Points Monitor
 
-Sistema automatizado de monitoramento de promoções de transferência de pontos **Livelo**. Detecta novas promoções com bônus para parceiros (Smiles, TudoAzul, Latam Pass, etc.), salva no PostgreSQL e envia alertas em tempo real via Telegram.
+Automated monitoring system for **Livelo** (Brazilian loyalty program) point-transfer promotions. It scrapes two sources, detects new bonus offers to airline partners (Smiles, TudoAzul, Latam Pass), stores them in PostgreSQL, and sends real-time Telegram alerts — running unattended on GitHub Actions since early 2025.
 
-## Arquitetura
+**Why it exists:** transfer bonuses of 80–100% appear with no warning and expire in days. Catching them manually means checking the site every morning. This bot does it for me and pings my phone within hours of a new offer.
+
+## Architecture
 
 ```
 main.py → AppOrchestrator
-              ├── LiveloScraper      (Playwright)  → extrai promoções do site
-              ├── DatabaseManager    (psycopg2)    → persiste no PostgreSQL
-              └── TelegramNotifier   (requests)    → envia alertas formatados
+              ├── LiveloScraper      (Playwright)  → scrapes offers page + blog
+              ├── DatabaseManager    (psycopg2)    → persists to PostgreSQL (Neon)
+              └── TelegramNotifier   (requests)    → sends formatted alerts
 ```
 
-O sistema garante **idempotência**: cada promoção gera um hash SHA-256 único (parceiro + bônus + datas). Promoções já registradas são ignoradas — sem alertas duplicados.
+Key design decisions:
 
-## Estrutura do Projeto
+- **Idempotency by content hash** — each promotion generates a unique SHA-256 hash (partner + bonus + dates). Already-seen promotions are skipped: no duplicate alerts, safe to re-run anytime.
+- **Dual-source scraping** — the offers page and the Livelo blog are scraped independently; either one failing doesn't block the other.
+- **Zero-cost infrastructure** — GitHub Actions cron (every 6h) + Neon PostgreSQL free tier + Telegram Bot API. No server to maintain.
+
+## Project structure
 
 ```
 monitor-milhas/
-├── .github/workflows/monitor.yml   # Execução agendada (cron 6h)
+├── .github/workflows/monitor.yml   # Scheduled run (cron, every 6h)
 ├── src/
-│   ├── config.py                    # Variáveis de ambiente
-│   ├── models.py                    # Dataclass Promocao + hash
-│   ├── scraper.py                   # Web scraper (Playwright)
-│   ├── database.py                  # CRUD PostgreSQL + migration
-│   ├── notifier.py                  # Telegram Bot API (HTML)
-│   └── orchestrator.py              # Fluxo principal
+│   ├── config.py                    # Environment variables
+│   ├── models.py                    # Promotion dataclass + hashing
+│   ├── scraper.py                   # Playwright web scraper
+│   ├── database.py                  # PostgreSQL CRUD + migration
+│   ├── notifier.py                  # Telegram Bot API (HTML messages)
+│   └── orchestrator.py              # Main flow
 ├── main.py                          # Entry point
-├── analysis.py                      # Relatório analítico
-├── requirements.txt
-└── .env.example
+├── analysis.py                      # Analytics report over collected data
+└── requirements.txt
 ```
 
-## Pré-requisitos
+## Example alert
 
-- Python 3.12+
-- PostgreSQL (recomendado: [Neon.tech](https://neon.tech) — free tier)
-- Bot do Telegram (criar via [@BotFather](https://t.me/BotFather))
+```
+New Livelo promotion!
 
-## Instalação
+Partner: Smiles
+Bonus: 80%
+Period: Mar 01 – Mar 15
+
+→ View offer
+```
+
+## Setup
+
+Requirements: Python 3.12+, a PostgreSQL instance (Neon free tier works), and a Telegram bot token from [@BotFather](https://t.me/BotFather).
 
 ```bash
-# Clonar o repositório
-git clone https://github.com/seu-usuario/monitor-milhas.git
-cd monitor-milhas
-
-# Criar ambiente virtual
-python -m venv venv
-source venv/bin/activate  # Linux/Mac
-venv\Scripts\activate     # Windows
-
-# Instalar dependências
+git clone https://github.com/vini-haa/monitor_milhas.git
+cd monitor_milhas
+python -m venv venv && source venv/bin/activate   # Windows: venv\Scripts\activate
 pip install -r requirements.txt
-
-# Instalar navegador headless
 playwright install chromium
-```
-
-## Configuração
-
-Crie um arquivo `.env` na raiz do projeto:
-
-```env
-DATABASE_URL=postgresql://user:password@host.neon.tech/dbname?sslmode=require
-TELEGRAM_TOKEN=123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11
-TELEGRAM_CHAT_ID=123456789
-```
-
-### Como obter cada variável
-
-| Variável | Onde conseguir |
-|----------|---------------|
-| `DATABASE_URL` | [Neon.tech](https://neon.tech) → Dashboard → Connection string |
-| `TELEGRAM_TOKEN` | Telegram → [@BotFather](https://t.me/BotFather) → `/newbot` |
-| `TELEGRAM_CHAT_ID` | Envie uma mensagem para o bot e acesse `https://api.telegram.org/bot<TOKEN>/getUpdates` |
-
-## Uso
-
-### Executar o monitor
-
-```bash
+cp .env.example .env   # fill in DB and Telegram credentials
 python main.py
 ```
 
-O script acessa a Livelo, extrai promoções ativas, salva as novas no banco e envia alertas no Telegram.
-
-### Gerar relatório analítico
-
-```bash
-python analysis.py
-```
-
-Gera no terminal:
-- Resumo geral (total, média, maior e menor bônus)
-- Média de bônus por mês
-- Ranking dos parceiros mais frequentes
-- Top 5 maiores bônus registrados
-
-## GitHub Actions
-
-O workflow `.github/workflows/monitor.yml` executa o monitor automaticamente a cada **6 horas**.
-
-Para ativar, configure os Secrets no repositório:
-
-> **Settings → Secrets and variables → Actions → New repository secret**
-
-Adicione: `DATABASE_URL`, `TELEGRAM_TOKEN`, `TELEGRAM_CHAT_ID`.
-
-O workflow também aceita execução manual pela aba **Actions → Run workflow**.
-
-## Schema do Banco
-
-A tabela é criada automaticamente na primeira execução:
+The database table is created automatically on first run:
 
 ```sql
 CREATE TABLE IF NOT EXISTS promocoes (
@@ -125,27 +77,10 @@ CREATE TABLE IF NOT EXISTS promocoes (
 );
 ```
 
-## Exemplo de Alerta no Telegram
+## Tech stack
 
-```
-Nova Promoção Livelo!
+Python 3.12 · Playwright · PostgreSQL (Neon) · psycopg2 · Telegram Bot API · GitHub Actions
 
-Parceiro: Smiles
-Bônus: 80%
-Período: 01/03 até 15/03
-
-Ver promoção no site
-```
-
-## Tech Stack
-
-- **Python 3.12** — linguagem principal
-- **Playwright** — automação de browser headless
-- **psycopg2** — driver PostgreSQL
-- **PostgreSQL (Neon.tech)** — banco de dados serverless
-- **Telegram Bot API** — notificações em tempo real
-- **GitHub Actions** — orquestração e agendamento
-
-## Licença
+## License
 
 MIT
